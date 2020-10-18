@@ -1,169 +1,172 @@
 #include <iostream>
-#include <list>
+#include <vector>
+#include <stack>
 
 using namespace std;
-
-struct path {
-    int x;
-    int y;
-};
 
 struct Planet{
     int number;
     int distFromStart;
+    int from;
     bool isInfected;
-    list<Planet*> neighbors;
+    bool isHealing;
+    bool wasShipInfected;
+    vector<int> neighbors;
+    int pathInfected;
 
     Planet(){
         number = 0;
         distFromStart = INT32_MAX;
         isInfected = false;
+        pathInfected = 0;
+        from = 0;
+        wasShipInfected = false;
+        isHealing = false;
     }
 };
 
 class Graph{
 public:
-    Graph(path* paths, int planetsCount, int pathsCount, int start, int terminate,
-          const int* infectedPlanets, int infectedPlanetsCount, int pathAliveCount){
-        planets = new Planet[planetsCount];
-        startPlanet = &planets[start];
-        terminatePlanet = &planets[terminate];
-        this->pathAliveCount = pathAliveCount;
-
-        for (int i = 0; i < pathsCount; i++){
-            planets[paths[i].x].neighbors.push_back(&planets[paths[i].y]);
-            planets[paths[i].y].neighbors.push_back(&planets[paths[i].x]);
-        }
-
-        for (int i = 0; i < planetsCount; i++){
-            planets[i].number = i;
-        }
-
-        for (int i = 0; i < infectedPlanetsCount; i++){
-            planets[infectedPlanets[i]].isInfected = true;
-        }
+    Graph(Planet* planets, int start, int terminate, int pathsAliveCount){
+        this->planets = planets;
+        startPlanet = start;
+        terminatePlanet = terminate;
+        this->pathAliveCount = pathsAliveCount;
     }
 
     ~Graph(){
         delete [] planets;
     }
 
-    list<Planet*> CreateRoute(){
-        startPlanet->distFromStart = 0;
-        CreatingRoute(startPlanet, 0);
+    stack<int> CreateRoute(){
+        planets[startPlanet].distFromStart = 0;
+        CreatingRoute();
 
-        if (terminatePlanet->distFromStart == INT32_MAX) {
-            route.clear();
-            return route;
+        if (planets[terminatePlanet].distFromStart == INT32_MAX) {
+            return stack<int>();
         }
 
-        FindRoute(terminatePlanet);
+        FindRoute();
 
         return route;
     }
 
 private:
-    void CreatingRoute(Planet* current, int pathInfected){
-        if ((pathInfected >= pathAliveCount && pathAliveCount > 0)
-        || (current->isInfected && pathAliveCount == 0))
-            return;
+    void CreatingRoute(){
+        stack<int> planetStack;
+        planetStack.emplace(startPlanet);
 
-        if (current->isInfected && pathInfected == 0)
-            pathInfected = 1;
-        else if (pathInfected > 0)
-            pathInfected++;
+        while(!planetStack.empty()) {
+            int current = planetStack.top();
+            planetStack.pop();
 
-        for(auto neighbor: current->neighbors){
-            if (neighbor->distFromStart > current->distFromStart + 1){
-                neighbor->distFromStart = current->distFromStart + 1;
-                CreatingRoute(neighbor, pathInfected);
-            }
-        }
-    }
-
-    void FindRoute(Planet* current){
-        route.push_front(current);
-        for (auto neighbor: current->neighbors){
-            if (neighbor->distFromStart == current->distFromStart - 1){
-                FindRoute(neighbor);
+            if (current == terminatePlanet)
                 break;
+
+            if (planets[current].isInfected) {
+                planets[current].wasShipInfected = true;
+            }
+            if (planets[current].wasShipInfected) {
+                if (planets[current].pathInfected >= pathAliveCount)
+                    continue;
+                planets[current].pathInfected++;
+            }
+
+            for (auto neighbor: planets[current].neighbors) {
+                if (planets[neighbor].distFromStart > planets[current].distFromStart + 1
+                || planets[neighbor].pathInfected > planets[current].pathInfected
+                || (planets[neighbor].wasShipInfected && !planets[current].wasShipInfected)) {
+                    planets[neighbor].distFromStart = planets[current].distFromStart + 1;
+                    planets[neighbor].pathInfected = planets[current].pathInfected;
+                    planets[neighbor].from = current;
+                    planets[neighbor].wasShipInfected = planets[current].wasShipInfected;
+                    planetStack.push(neighbor);
+                }
             }
         }
     }
 
-    Planet* startPlanet;
-    Planet* terminatePlanet;
+    void FindRoute(){
+        int current = terminatePlanet;
+        route.push(current);
+
+        while (planets[current].number != planets[startPlanet].number) {
+            current = planets[current].from;
+            route.push(current);
+        }
+    }
+
+    int startPlanet;
+    int terminatePlanet;
     Planet* planets;
     int pathAliveCount;
-    list<Planet*> route;
+    stack<int> route;
 };
 
-void readInput(int& plantCount,
-               int& pathsCount,
+void readInput(Planet*& planets,
                int& startPlanet,
                int& terminatePlanet,
-               int& pathAliveCount,
-               int& infectedPlanetsCount,
-               int*& infectedPlanets,
-               int& planetsWithVaccineCount,
-               int*& planetsWithVaccine,
-               path*& paths)
+               int& pathAliveCount)
 {
-    cin >> plantCount >> pathsCount;
+    int pathsCount, infectedPlanetsCount, planetsWithVaccineCount, planetsCount;
+    cin >> planetsCount >> pathsCount;
     cin >> startPlanet >> terminatePlanet >> pathAliveCount;
     cin >> infectedPlanetsCount;
-    infectedPlanets = new int[infectedPlanetsCount];
+
+    planets = new Planet[planetsCount];
+
+    for (int i = 0; i < planetsCount; i++){
+        planets[i].number = i;
+    }
 
     for (int i = 0; i < infectedPlanetsCount; i++){
-        cin >> infectedPlanets[i];
+        int infectedPlanet;
+        cin >> infectedPlanet;
+        planets[infectedPlanet].isInfected = true;
     }
 
     cin >> planetsWithVaccineCount;
-    planetsWithVaccine = new int[planetsWithVaccineCount];
 
     for (int i = 0; i < planetsWithVaccineCount; i++){
-        cin >> planetsWithVaccine[i];
+        int planetWithVaccine;
+        cin >> planetWithVaccine;
+        planets[planetWithVaccine].isHealing = true;
     }
-
-    paths = new path[pathsCount];
 
     for (int i = 0; i < pathsCount; i++)
     {
-        cin >> paths[i].x >> paths[i].y;
+        int x, y;
+        cin >> x >> y;
+        planets[x].neighbors.push_back(y);
+        planets[y].neighbors.push_back(x);
     }
 }
 
 int main() {
-    int planetsCount, pathsCount, startPlanet, terminatePlanet, pathAliveCount,
-    infectedPlanetsCount, planetsWithVaccineCount;
+    Planet* planets = nullptr;
 
-    int* infectedPlanets = nullptr;
-    int* planetsWithVaccines = nullptr;
-    path* paths = nullptr;
+    int pathsAliveCount, startPlanet, terminatePlanet;
 
-    readInput(planetsCount, pathsCount, startPlanet, terminatePlanet, pathAliveCount,
-              infectedPlanetsCount, infectedPlanets, planetsWithVaccineCount,
-              planetsWithVaccines, paths);
+    readInput(planets, startPlanet, terminatePlanet, pathsAliveCount);
 
-    auto graph = new Graph(paths, planetsCount, pathsCount, startPlanet, terminatePlanet,
-                           infectedPlanets, infectedPlanetsCount, pathAliveCount);
-    delete [] paths;
-    delete [] infectedPlanets;
-    delete [] planetsWithVaccines;
+   auto graph = new Graph(planets, startPlanet, terminatePlanet, pathsAliveCount);
 
-    auto result = graph->CreateRoute();
+   auto result = graph->CreateRoute();
 
-    if (result.empty()){
-        cout << -1;
-    }
-    else {
-        for (auto planet: result) {
-            cout << planet->number << ' ';
-        }
-    }
-    cout << endl;
+   if (result.empty()){
+       cout << -1;
+   }
+   else {
+       while (!result.empty()) {
+           cout << result.top() << ' ';
+           result.pop();
+       }
+   }
+   cout << endl;
 
-    delete graph;
+   delete graph;
+
+//     delete [] planets;
 
     return 0;
 }
